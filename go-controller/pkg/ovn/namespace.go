@@ -246,12 +246,12 @@ func (oc *Controller) updateNamespace(old, newer *kapi.Namespace) {
 		// if old gw annotation was empty, new one must not be empty, so we should remove any per pod SNAT
 		if oldGWAnnotation == "" {
 			if config.Gateway.DisableSNATMultipleGWs && (len(nsInfo.routingExternalGWs.gws) != 0 || len(nsInfo.routingExternalPodGWs) != 0) {
-				existingPods, err := oc.watchFactory.GetPods(old.Name)
+				existingPods, err := oc.mc.watchFactory.GetPods(old.Name)
 				if err != nil {
 					klog.Errorf("Failed to get all the pods (%v)", err)
 				}
 				for _, pod := range existingPods {
-					logicalPort := podLogicalPortName(pod)
+					logicalPort := podLogicalPortName(pod, oc.netconf.Name)
 					portInfo, err := oc.logicalPortCache.get(logicalPort)
 					if err != nil {
 						klog.Warningf("Unable to get port %s in cache for SNAT rule removal", logicalPort)
@@ -275,12 +275,12 @@ func (oc *Controller) updateNamespace(old, newer *kapi.Namespace) {
 		// if new annotation is empty, exgws were removed, may need to add SNAT per pod
 		// check if there are any pod gateways serving this namespace as well
 		if gwAnnotation == "" && len(nsInfo.routingExternalPodGWs) == 0 && config.Gateway.DisableSNATMultipleGWs {
-			existingPods, err := oc.watchFactory.GetPods(old.Name)
+			existingPods, err := oc.mc.watchFactory.GetPods(old.Name)
 			if err != nil {
 				klog.Errorf("Failed to get all the pods (%v)", err)
 			}
 			for _, pod := range existingPods {
-				podAnnotation, err := util.UnmarshalPodAnnotation(pod.Annotations)
+				podAnnotation, err := util.UnmarshalPodAnnotation(pod.Annotations, oc.netconf.Name)
 				if err != nil {
 					klog.Error(err.Error())
 				} else {
@@ -421,7 +421,7 @@ func (oc *Controller) deleteNamespaceLocked(ns string) *namespaceInfo {
 func (oc *Controller) createNamespaceAddrSetAllPods(ns string) (addressset.AddressSet, error) {
 	// Get all the pods in the namespace and append their IP to the address_set
 	var ips []net.IP
-	existingPods, err := oc.watchFactory.GetPods(ns)
+	existingPods, err := oc.mc.watchFactory.GetPods(ns)
 	if err != nil {
 		klog.Errorf("Failed to get all the pods (%v)", err)
 	} else {
